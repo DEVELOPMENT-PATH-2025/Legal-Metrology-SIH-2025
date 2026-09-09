@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with role-based attributes for Legal Metrology platform",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Full name of the officer" },
+        "role": { "type": "string", "enum": ["inspector", "reviewer", "admin"], "description": "Assigned platform role" },
+        "jurisdiction": { "type": "string", "description": "Assigned zone or district" },
+        "badgeNumber": { "type": "string", "description": "Officer badge or staff ID" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Inspection": {
+      "title": "Inspection",
+      "description": "A field inspection record with multi-product scope",
+      "type": "object",
+      "properties": {
+        "inspectionNumber": { "type": "string", "description": "Unique statutory inspection number" },
+        "businessName": { "type": "string", "description": "Target enterprise or trading entity" },
+        "businessAddress": { "type": "string", "description": "Location of inspection" },
+        "licenseNumber": { "type": "string", "description": "Trading or metrology license number" },
+        "category": { "type": "string", "description": "Inspection sector category" },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "in_progress", "ready_to_submit", "submitted", "returned", "approved", "non_compliant"],
+          "description": "Lifecycle state"
+        },
+        "inspectorId": { "type": "string", "description": "UID of assigned inspector" },
+        "inspectorName": { "type": "string", "description": "Name of inspector" },
+        "reviewerId": { "type": "string", "description": "UID of reviewer if assigned" },
+        "reviewerName": { "type": "string", "description": "Name of reviewer" },
+        "complianceOutcome": { "type": "string", "enum": ["compliant", "review_required", "non_compliant", "pending"] },
+        "reviewComments": { "type": "string", "description": "Review remarks or corrections needed" },
+        "productCount": { "type": "number", "description": "Total products in this inspection" },
+        "evidenceCount": { "type": "number", "description": "Total evidence items captured" },
+        "scheduledDate": { "type": "string", "description": "Inspection date" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" }
+      },
+      "required": ["inspectionNumber", "businessName", "status", "inspectorId"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "An independently evaluated product within an inspection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Product ID" },
+        "inspectionId": { "type": "string", "description": "Parent inspection ID" },
+        "name": { "type": "string", "description": "Product commercial name" },
+        "brand": { "type": "string", "description": "Brand or trademark" },
+        "batchNumber": { "type": "string", "description": "Batch / Lot code" },
+        "mrp": { "type": "number", "description": "Maximum Retail Price in INR" },
+        "netQuantity": { "type": "string", "description": "Declared net quantity e.g. 500g, 1L" },
+        "actualMeasurement": { "type": "string", "description": "Physical metrological measured quantity" },
+        "manufacturerName": { "type": "string", "description": "Manufacturer / Packer / Importer name" },
+        "manufacturerAddress": { "type": "string", "description": "Complete registered facility address" },
+        "monthYearOfManufacture": { "type": "string", "description": "MM/YYYY packaging declaration" },
+        "consumerCareDetails": { "type": "string", "description": "Customer care telephone and email" },
+        "unitSalePrice": { "type": "string", "description": "Per unit price declaration e.g. Rs 0.40 per g" },
+        "countryOfOrigin": { "type": "string", "description": "Country of origin declaration" },
+        "verificationStatus": { "type": "string", "enum": ["pending", "verified", "flagged"] },
+        "complianceStatus": { "type": "string", "enum": ["compliant", "warning", "violation"] },
+        "evidenceCount": { "type": "number", "description": "Number of evidence photos attached" },
+        "notes": { "type": "string", "description": "Inspector field notes" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "inspectionId", "name"]
+    },
+    "Evidence": {
+      "title": "Evidence",
+      "description": "Packaging evidence photo with OCR extraction and traceability",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Evidence ID" },
+        "productId": { "type": "string", "description": "Scoped product ID" },
+        "inspectionId": { "type": "string", "description": "Parent inspection ID" },
+        "title": { "type": "string", "description": "Label side e.g. Front Panel, MRP Panel" },
+        "imageUrl": { "type": "string", "description": "Photo URI or storage link" },
+        "ocrRawText": { "type": "string", "description": "Raw OCR output" },
+        "verificationStatus": {
+          "type": "string",
+          "enum": ["ai_detected", "inspector_verified", "inspector_edited", "rejected"]
+        },
+        "imageQuality": { "type": "string", "enum": ["high", "acceptable", "poor"] },
+        "fileSize": { "type": "number", "description": "Size in bytes" },
+        "capturedAt": { "type": "string", "description": "Capture timestamp" }
+      },
+      "required": ["id", "productId", "inspectionId", "imageUrl"]
+    },
+    "Finding": {
+      "title": "Finding",
+      "description": "A statutory compliance finding evaluated by legal metrology rules",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Finding ID" },
+        "inspectionId": { "type": "string", "description": "Parent inspection ID" },
+        "productId": { "type": "string", "description": "Scoped product ID" },
+        "ruleCode": { "type": "string", "description": "Statutory rule reference" },
+        "ruleTitle": { "type": "string", "description": "Rule label" },
+        "ruleDescription": { "type": "string", "description": "Legal requirement description" },
+        "severity": { "type": "string", "enum": ["violation", "warning", "advisory"] },
+        "status": { "type": "string", "enum": ["open", "resolved", "accepted"] },
+        "observation": { "type": "string", "description": "Inspector/system observation" },
+        "evidenceId": { "type": "string", "description": "Linked evidence photo ID" }
+      },
+      "required": ["id", "inspectionId", "productId", "ruleCode", "severity"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Immutable audit record tracking actor, action, and state changes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Event ID" },
+        "inspectionId": { "type": "string", "description": "Inspection ID" },
+        "actorId": { "type": "string", "description": "Actor UID" },
+        "actorEmail": { "type": "string", "description": "Actor email address" },
+        "actorRole": { "type": "string", "enum": ["inspector", "reviewer", "admin", "system"] },
+        "action": { "type": "string", "description": "Action name" },
+        "details": { "type": "string", "description": "Human readable detail" },
+        "timestamp": { "type": "string", "description": "Event timestamp" }
+      },
+      "required": ["id", "inspectionId", "actorId", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores user profiles with role attribution"
+    },
+    "/inspections/{inspectionId}": {
+      "schema": "Inspection",
+      "description": "Stores multi-product inspection dossiers"
+    },
+    "/inspections/{inspectionId}/products/{productId}": {
+      "schema": "Product",
+      "description": "Stores product-scoped metrological data"
+    },
+    "/inspections/{inspectionId}/products/{productId}/evidence/{evidenceId}": {
+      "schema": "Evidence",
+      "description": "Stores evidence packaging photos and OCR transcriptions"
+    },
+    "/inspections/{inspectionId}/findings/{findingId}": {
+      "schema": "Finding",
+      "description": "Stores compliance rule findings linked to evidence"
+    },
+    "/inspections/{inspectionId}/audit_events/{eventId}": {
+      "schema": "AuditEvent",
+      "description": "Stores immutable audit events for complete traceability"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Legal Metrology Inspection & Compliance Platform",
+  "description": "Evidence-backed, human-verified, auditable compliance platform for Legal Metrology inspections with role-based workflows for Inspectors, Reviewers, and Administrators.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

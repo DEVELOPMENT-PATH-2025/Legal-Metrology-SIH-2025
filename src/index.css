@@ -1,0 +1,352 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   LEGAL METROLOGY PORTAL - STATUTORY BRAND COLOR PALETTE
+   PRIMARY:    #123B5D (Deep Navy)
+   ACCENT:     #F28C28 (Saffron Amber)
+   SUCCESS:    #198754 (Enforcement Green)
+   BACKGROUND: #F7F9FC (Refined Light Neutral)
+   SURFACE:    #FFFFFF (Card & Container Surface)
+   TEXT:       #172B4D (Deep Navy Slate Text)
+   MUTED:      #5B6878 (Secondary Neutral Text)
+   BORDER:     #D9E2EC (Clean Divider & Border)
+   WARNING:    #D99A00 (Amber Statutory Warning)
+   ERROR:      #C62828 (Statutory Crimson Violation)
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+  --color-primary: #123B5D;
+  --color-accent: #F28C28;
+  --color-success: #198754;
+  --color-background: #0b1320;
+  --color-surface: #121e30;
+  --color-text: #f1f5f9;
+  --color-muted: #5B6878;
+  --color-border: #1e2f47;
+  --color-warning: #D99A00;
+  --color-error: #C62828;
+}
+
+html.light,
+body.light,
+[data-theme="light"] {
+  color-scheme: light;
+  --color-primary: #123B5D;
+  --color-accent: #F28C28;
+  --color-success: #198754;
+  --color-background: #F7F9FC;
+  --color-surface: #FFFFFF;
+  --color-text: #172B4D;
+  --color-muted: #5B6878;
+  --color-border: #D9E2EC;
+  --color-warning: #D99A00;
+  --color-error: #C62828;
+}
+
+/* ==========================================================================
+   LIGHT MODE PALETTE MAPPINGS
+   ========================================================================== */
+html.light,
+body.light {
+  background-color: #F7F9FC !important;
+  color: #172B4D !important;
+}
+
+/* Backgrounds */
+html.light .bg-slate-950,
+body.light .bg-slate-950 {
+  background-color: #F7F9FC !important;
+}
+
+html.light .bg-slate-900,
+body.light .bg-slate-900 {
+  background-color: #FFFFFF !important;
+}
+
+html.light .bg-slate-900\/95,
+body.light .bg-slate-900\/95 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+html.light .bg-slate-900\/90,
+body.light .bg-slate-900\/90 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+html.light .bg-slate-900\/80,
+body.light .bg-slate-900\/80 {
+  background-color: rgba(255, 255, 255, 0.88) !important;
+}
+
+html.light .bg-slate-900\/60,
+html.light .bg-slate-900\/50,
+body.light .bg-slate-900\/60,
+body.light .bg-slate-900\/50 {
+  background-color: #F0F4F8 !important;
+}
+
+html.light .bg-slate-800,
+body.light .bg-slate-800 {
+  background-color: #F0F4F8 !important;
+}
+
+html.light .bg-slate-800\/90,
+html.light .bg-slate-800\/80,
+html.light .bg-slate-800\/60,
+body.light .bg-slate-800\/90,
+body.light .bg-slate-800\/80,
+body.light .bg-slate-800\/60 {
+  background-color: #F0F4F8 !important;
+}
+
+html.light .hover\:bg-slate-800:hover,
+html.light .hover\:bg-slate-800\/80:hover,
+html.light .hover\:bg-slate-800\/60:hover,
+body.light .hover\:bg-slate-800:hover {
+  background-color: #E2E8F0 !important;
+}
+
+html.light .hover\:bg-slate-700:hover,
+body.light .hover\:bg-slate-700:hover {
+  background-color: #D9E2EC !important;
+}
+
+/* Borders */
+html.light .border-slate-800,
+html.light .border-slate-800\/80,
+html.light .border-slate-900,
+body.light .border-slate-800,
+body.light .border-slate-800\/80,
+body.light .border-slate-900 {
+  border-color: #D9E2EC !important;
+}
+
+html.light .border-slate-700,
+html.light .border-slate-700\/80,
+body.light .border-slate-700,
+body.light .border-slate-700\/80 {
+  border-color: #D9E2EC !important;
+}
+
+html.light .hover\:border-slate-700:hover,
+body.light .hover\:border-slate-700:hover {
+  border-color: #BCCCDC !important;
+}
+
+/* Typography */
+html.light .text-white,
+html.light .text-slate-100,
+html.light .text-slate-200,
+body.light .text-white,
+body.light .text-slate-100,
+body.light .text-slate-200 {
+  color: #172B4D !important;
+}
+
+html.light .text-slate-300,
+body.light .text-slate-300 {
+  color: #243B53 !important;
+}
+
+html.light .text-slate-400,
+html.light .text-slate-500,
+body.light .text-slate-400,
+body.light .text-slate-500 {
+  color: #5B6878 !important;
+}
+
+html.light .hover\:text-white:hover,
+html.light .hover\:text-slate-200:hover,
+body.light .hover\:text-white:hover,
+body.light .hover\:text-slate-200:hover {
+  color: #123B5D !important;
+}
+
+/* Brand Primary (#123B5D) & Accent (#F28C28) & Status Overrides */
+.bg-blue-600,
+button.bg-blue-600 {
+  background-color: #123B5D !important;
+  color: #FFFFFF !important;
+}
+
+.bg-blue-600:hover,
+button.bg-blue-600:hover,
+.hover\:bg-blue-500:hover,
+.hover\:bg-blue-600:hover {
+  background-color: #0d2a42 !important;
+}
+
+.text-blue-600,
+.text-blue-500 {
+  color: #123B5D !important;
+}
+
+html.light .text-blue-400 {
+  color: #123B5D !important;
+}
+
+/* Accent Saffron (#F28C28) */
+.text-amber-500,
+.text-amber-400 {
+  color: #F28C28 !important;
+}
+
+.bg-amber-500,
+.bg-amber-600 {
+  background-color: #F28C28 !important;
+}
+
+/* Success (#198754) */
+.bg-emerald-600,
+.bg-emerald-500 {
+  background-color: #198754 !important;
+  color: #FFFFFF !important;
+}
+
+.text-emerald-500,
+.text-emerald-600 {
+  color: #198754 !important;
+}
+
+html.light .text-emerald-400 {
+  color: #198754 !important;
+}
+
+html.light .border-emerald-500,
+html.light .border-emerald-600,
+html.light .border-emerald-800 {
+  border-color: #198754 !important;
+}
+
+html.light .bg-emerald-950,
+html.light .bg-emerald-900\/40,
+html.light .bg-emerald-950\/40 {
+  background-color: #E8F5E9 !important;
+  color: #198754 !important;
+}
+
+/* Warning (#D99A00) */
+.text-yellow-600,
+.text-yellow-500 {
+  color: #D99A00 !important;
+}
+
+html.light .bg-yellow-950,
+html.light .bg-amber-950,
+html.light .bg-amber-950\/40 {
+  background-color: #FFF8E1 !important;
+  color: #D99A00 !important;
+}
+
+/* Error (#C62828) */
+.bg-rose-600,
+.bg-rose-700,
+.bg-red-600 {
+  background-color: #C62828 !important;
+  color: #FFFFFF !important;
+}
+
+.text-rose-500,
+.text-rose-600,
+.text-red-500,
+.text-red-600 {
+  color: #C62828 !important;
+}
+
+html.light .text-rose-400,
+html.light .text-red-400 {
+  color: #C62828 !important;
+}
+
+html.light .border-rose-600\/40,
+html.light .border-rose-500,
+html.light .border-rose-800 {
+  border-color: #C62828 !important;
+}
+
+html.light .bg-rose-950\/40,
+html.light .bg-rose-950,
+html.light .bg-red-950 {
+  background-color: #FFEBEE !important;
+  color: #C62828 !important;
+}
+
+/* Form Controls */
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light textarea,
+html.light select {
+  background-color: #FFFFFF !important;
+  color: #172B4D !important;
+  border-color: #D9E2EC !important;
+}
+
+html.light input:focus,
+html.light textarea:focus,
+html.light select:focus {
+  border-color: #123B5D !important;
+  box-shadow: 0 0 0 3px rgba(18, 59, 93, 0.15) !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #5B6878 !important;
+}
+
+/* Gradients in light mode */
+html.light .from-slate-900.via-slate-950.to-slate-950,
+body.light .from-slate-900.via-slate-950.to-slate-950 {
+  background-image: linear-gradient(to bottom, #FFFFFF, #F7F9FC, #F7F9FC) !important;
+}
+
+html.light .from-blue-900\/20.to-indigo-900\/20,
+body.light .from-blue-900\/20.to-indigo-900\/20 {
+  background-image: linear-gradient(to bottom right, #EBF3FA, #F0F4F8) !important;
+}
+
+/* Modals & Backdrop */
+html.light .bg-slate-950\/80,
+body.light .bg-slate-950\/80 {
+  background-color: rgba(23, 43, 77, 0.45) !important;
+}
+
+/* Card and container shadows in light mode */
+html.light .shadow-2xl {
+  box-shadow: 0 20px 30px -10px rgba(23, 43, 77, 0.08), 0 0 0 1px #D9E2EC !important;
+}
+
+html.light .shadow-xl {
+  box-shadow: 0 14px 20px -4px rgba(23, 43, 77, 0.06), 0 0 0 1px #D9E2EC !important;
+}
+
+html.light .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(23, 43, 77, 0.05), 0 0 0 1px #D9E2EC !important;
+}
+
+html.light .shadow-sm {
+  box-shadow: 0 1px 3px 0 rgba(23, 43, 77, 0.04), 0 0 0 1px #D9E2EC !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334e68;
+  border-radius: 9999px;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #D9E2EC;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #BCCCDC;
+}
+
