@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  Scale, 
-  User, 
-  BookOpen, 
+import {
+  Scale,
+  User,
+  BookOpen,
   LogOut,
   Shield,
   BadgeCheck,
@@ -40,10 +40,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="bg-slate-900/95 backdrop-blur-md text-slate-100 border-b border-slate-800 sticky top-0 z-40 shadow-sm transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-3 sm:gap-4">
-          
+
           {/* Brand & Statutory Identity */}
-          <div 
-            className="flex items-center space-x-3 cursor-pointer select-none" 
+          <div
+            className="flex items-center space-x-3 cursor-pointer select-none"
             onClick={() => onNavigate('welcome')}
             title="Return to National Legal Metrology Welcome"
           >
@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-base sm:text-lg tracking-tight text-white">
-                  LEGAL METROLOGY
+                  Veriqo - LEGAL METROLOGY
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded font-mono font-semibold bg-slate-800 text-blue-400 border border-slate-700">
                   PCR-2011
@@ -70,11 +70,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="nav-welcome-btn"
               onClick={() => onNavigate('welcome')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                activeView === 'welcome' 
-                  ? 'bg-slate-800 text-blue-400 border border-slate-700 shadow-sm' 
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 ${activeView === 'welcome'
+                  ? 'bg-slate-800 text-blue-400 border border-slate-700 shadow-sm'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-              }`}
+                }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
               <span>Portal Welcome</span>
@@ -83,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Section: Theme Toggle + Officer Profile + Sign Out + Account / Login */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            
+
             {/* Dark / Light Mode Toggle Button */}
             <ThemeToggle />
 
@@ -125,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </span>
                     )}
                   </div>
-                  
+
                   {/* Profile info */}
                   <div className="py-2.5 border-b border-slate-800 space-y-1.5">
                     <p className="font-semibold text-slate-100 text-sm truncate">{currentUser.displayName}</p>
@@ -153,10 +152,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <div className="flex flex-col">
                         <span className="text-[9px] text-slate-400 font-mono uppercase">Assigned Role</span>
                         <span className="text-xs font-bold text-blue-300 flex items-center gap-1">
-                          {currentUser.role === 'inspector' 
-                            ? 'Field Inspector' 
-                            : currentUser.role === 'reviewer' 
-                              ? 'Reviewing Controller' 
+                          {currentUser.role === 'inspector'
+                            ? 'Field Inspector'
+                            : currentUser.role === 'reviewer'
+                              ? 'Reviewing Controller'
                               : 'Administrator'}
                           <BadgeCheck className="w-3 h-3 text-emerald-400" />
                         </span>
