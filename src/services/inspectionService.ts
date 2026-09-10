@@ -67,7 +67,7 @@ let memoryEvidence: Record<string, EvidenceItem[]> = loadCache(STORAGE_KEYS.EVID
 let memoryFindings: Finding[] = loadCache(STORAGE_KEYS.FINDINGS, INITIAL_FINDINGS);
 let memoryAudit: AuditEvent[] = loadCache(STORAGE_KEYS.AUDIT, INITIAL_AUDIT_LOGS);
 
-// Self-healing function: Ensure every inspection has authentic commodities and verified evidence photos
+// Synchronize inspection metadata and counts cleanly without creating dummy data
 function hydrateAndSyncAllInspections() {
   let hasModifications = false;
 
@@ -75,15 +75,6 @@ function hydrateAndSyncAllInspections() {
   memoryInspections = memoryInspections.filter(i => !deletedInspectionIds.has(i.id));
 
   memoryInspections.forEach((insp) => {
-    const prods = memoryProducts[insp.id] || [];
-    if (prods.length === 0) {
-      // Auto-generate realistic commodities and packaging evidence photos
-      const generated = generateProductsAndEvidenceForInspection(insp.id, insp.businessName, insp.category);
-      memoryProducts[insp.id] = generated.products;
-      Object.assign(memoryEvidence, generated.evidence);
-      hasModifications = true;
-    }
-
     const currentProds = memoryProducts[insp.id] || [];
     const totalEvCount = currentProds.reduce((sum, p) => sum + (memoryEvidence[p.id]?.length || 0), 0);
 
@@ -202,26 +193,6 @@ export const inspectionService = {
     const subs = productListeners.get(inspectionId)!;
     subs.add(callback);
 
-    // If products list for this inspection is currently empty, hydrate with real commodities
-    if (!memoryProducts[inspectionId] || memoryProducts[inspectionId].length === 0) {
-      const insp = memoryInspections.find(i => i.id === inspectionId);
-      const generated = generateProductsAndEvidenceForInspection(
-        inspectionId,
-        insp?.businessName || '',
-        insp?.category || ''
-      );
-      memoryProducts[inspectionId] = generated.products;
-      Object.assign(memoryEvidence, generated.evidence);
-      
-      if (insp) {
-        insp.productCount = generated.products.length;
-        insp.evidenceCount = generated.products.reduce((sum, p) => sum + (generated.evidence[p.id]?.length || 0), 0);
-        notifyInspections();
-      }
-      notifyProducts(inspectionId);
-      generated.products.forEach(p => notifyEvidence(p.id));
-    }
-
     callback([...(memoryProducts[inspectionId] || [])]);
 
     return () => {
@@ -265,31 +236,20 @@ export const inspectionService = {
   async createInspection(inspection: Omit<Inspection, 'id' | 'createdAt' | 'updatedAt' | 'productCount' | 'evidenceCount'>): Promise<Inspection> {
     const id = `insp-${Date.now()}`;
 
-    // Auto-generate realistic commodities and packaging evidence photos matching the business name
-    const { products: seededProds, evidence: seededEv } = generateProductsAndEvidenceForInspection(
-      id,
-      inspection.businessName,
-      inspection.category
-    );
-
-    const totalEvCount = seededProds.reduce((sum, p) => sum + (seededEv[p.id]?.length || 0), 0);
-
     const newInspection: Inspection = {
       ...inspection,
       id,
-      productCount: seededProds.length,
-      evidenceCount: totalEvCount,
+      productCount: 0,
+      evidenceCount: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     memoryInspections = [newInspection, ...memoryInspections];
-    memoryProducts[id] = seededProds;
-    Object.assign(memoryEvidence, seededEv);
+    memoryProducts[id] = [];
 
     notifyInspections();
     notifyProducts(id);
-    seededProds.forEach(p => notifyEvidence(p.id));
 
     // Log audit
     this.addAuditEvent({
@@ -298,22 +258,13 @@ export const inspectionService = {
       actorEmail: auth.currentUser?.email || 'officer@metrology.gov.in',
       actorRole: 'inspector',
       action: 'INSPECTION_CREATED',
-      details: `Created inspection ${newInspection.inspectionNumber} for ${newInspection.businessName} with ${seededProds.length} verified commodities`,
-      newState: newInspection.status
+      details: `Initiated official inspection dossier ${inspection.inspectionNumber} for ${inspection.businessName}`
     });
 
-    // Cloud firestore sync
     try {
       await setDoc(doc(db, 'inspections', id), newInspection);
-      for (const prod of seededProds) {
-        await setDoc(doc(db, 'inspections', id, 'products', prod.id), prod);
-        const evList = seededEv[prod.id] || [];
-        for (const ev of evList) {
-          await setDoc(doc(db, 'inspections', id, 'products', prod.id, 'evidence', ev.id), ev);
-        }
-      }
-    } catch (err) {
-      console.warn('Syncing to Firestore queued locally:', err);
+    } catch (e) {
+      console.warn('Inspection saved locally:', e);
     }
 
     return newInspection;

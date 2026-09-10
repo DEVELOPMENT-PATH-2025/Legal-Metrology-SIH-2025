@@ -9,21 +9,17 @@ import {
   X, 
   Eye, 
   Check, 
-  Layers, 
   Tag, 
   Building, 
   Calendar, 
   Scale, 
   Zap,
-  ChevronRight,
-  Maximize2,
+  Edit3,
   FileText
 } from 'lucide-react';
 import { 
   identifyProductFromImage, 
-  IdentifiedProductData, 
-  SAMPLE_PACKAGES, 
-  SamplePackagingItem 
+  IdentifiedProductData 
 } from '../services/aiVisionService';
 
 interface ProductAiScannerProps {
@@ -39,13 +35,14 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
   onApplyProductData,
   title = 'AI Packaging Scanner & Product Identifier'
 }) => {
-  const [mode, setMode] = useState<'webcam' | 'upload' | 'samples'>('webcam');
+  const [mode, setMode] = useState<'webcam' | 'upload'>('upload');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [isScanning, setIsScanning] = useState(false);
   const [extractedData, setExtractedData] = useState<IdentifiedProductData | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -86,8 +83,8 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
       setIsCameraActive(false);
       setCameraError(
         err.name === 'NotAllowedError'
-          ? 'Camera permission was denied. Please allow camera access in your browser or use the "Upload Photo" or "Sample Catalog" tabs.'
-          : 'Unable to start camera stream. You can upload an image or select a sample package to test instantly.'
+          ? 'Camera permission was denied. Please allow camera access in your browser or use the "Upload Photo" tab.'
+          : 'Unable to start camera stream. Please use the "Upload Photo" tab to upload a packaging image.'
       );
     }
   };
@@ -135,10 +132,20 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Select sample packaging item
-  const handleSelectSample = (sample: SamplePackagingItem) => {
-    setCapturedImage(sample.previewUrl);
-    processImageForIdentification(sample.previewUrl);
+  // Handle drag and drop
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        setCapturedImage(base64);
+        processImageForIdentification(base64);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Process image using AI Identification engine
@@ -153,6 +160,15 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
     } finally {
       setIsScanning(false);
     }
+  };
+
+  // Field change handler for user verification
+  const handleFieldChange = (field: keyof IdentifiedProductData, value: any) => {
+    if (!extractedData) return;
+    setExtractedData({
+      ...extractedData,
+      [field]: value
+    });
   };
 
   // Reset to retake
@@ -175,7 +191,7 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden text-slate-100 flex flex-col max-h-[90vh]">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden text-slate-100 flex flex-col max-h-[92vh]">
         
         {/* Modal Header */}
         <div className="px-6 py-4 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between shrink-0">
@@ -187,11 +203,11 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
               <h3 className="text-base font-bold text-white flex items-center space-x-2">
                 <span>{title}</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-blue-900/60 text-blue-300 border border-blue-700">
-                  REAL AI VISION
+                  MULTIMODAL AI OCR
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Identify mandatory Rule 6 packaging declarations & commodity metrics without manual typing
+                Upload or capture real product packaging to extract and verify statutory declarations
               </p>
             </div>
           </div>
@@ -203,20 +219,9 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
           </button>
         </div>
 
-        {/* Source Mode Selector (WebCam, Upload Image, Preset Packaging) */}
+        {/* Source Mode Selector (Upload Image or WebCam) */}
         {!capturedImage && (
-          <div className="grid grid-cols-3 border-b border-slate-800 text-xs font-semibold text-center bg-slate-900/60 shrink-0">
-            <button
-              onClick={() => setMode('webcam')}
-              className={`py-3 transition-colors flex items-center justify-center space-x-2 ${
-                mode === 'webcam'
-                  ? 'border-b-2 border-blue-500 text-blue-400 bg-slate-800/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Camera className="w-4 h-4" />
-              <span>Live WebCam</span>
-            </button>
+          <div className="grid grid-cols-2 border-b border-slate-800 text-xs font-semibold text-center bg-slate-900/60 shrink-0">
             <button
               onClick={() => setMode('upload')}
               className={`py-3 transition-colors flex items-center justify-center space-x-2 ${
@@ -226,18 +231,18 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
               }`}
             >
               <Upload className="w-4 h-4" />
-              <span>Upload Photo</span>
+              <span>Upload Packaging Photo</span>
             </button>
             <button
-              onClick={() => setMode('samples')}
+              onClick={() => setMode('webcam')}
               className={`py-3 transition-colors flex items-center justify-center space-x-2 ${
-                mode === 'samples'
+                mode === 'webcam'
                   ? 'border-b-2 border-blue-500 text-blue-400 bg-slate-800/40'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Layers className="w-4 h-4" />
-              <span>Statutory Samples</span>
+              <Camera className="w-4 h-4" />
+              <span>Live WebCam Stream</span>
             </button>
           </div>
         )}
@@ -248,6 +253,42 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
           {/* STATE 1: Capturing or Selecting */}
           {!capturedImage && (
             <div>
+              {/* Upload Image View (Default) */}
+              {mode === 'upload' && (
+                <div 
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  className={`p-10 border-2 border-dashed rounded-2xl text-center space-y-4 transition-all ${
+                    isDragging 
+                      ? 'border-blue-400 bg-blue-950/40 scale-[1.01]' 
+                      : 'border-slate-700 hover:border-blue-500 bg-slate-950/40'
+                  }`}
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto shadow-inner">
+                    <Upload className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">Select or Drag & Drop Real Packaging Photo</h4>
+                    <p className="text-xs text-slate-400 mt-1.5 max-w-md mx-auto leading-relaxed">
+                      Upload an authentic photo of the front, MRP, or manufacturing declaration panel. The AI multimodal vision engine will read the real text.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <label className="inline-flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-lg transition-all">
+                      <Camera className="w-4 h-4" />
+                      <span>Browse Image File</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
               {/* WebCam Viewfinder */}
               {mode === 'webcam' && (
                 <div className="space-y-4">
@@ -324,72 +365,6 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
                   )}
                 </div>
               )}
-
-              {/* Upload Image View */}
-              {mode === 'upload' && (
-                <div className="p-8 border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl text-center space-y-4 bg-slate-950/40 transition-colors">
-                  <div className="w-12 h-12 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto">
-                    <Upload className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">Upload Packaging Photo or Label</h4>
-                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                      Supports high-resolution JPEG, PNG, or WEBP photos taken from field phones or digital scales.
-                    </p>
-                  </div>
-                  <label className="inline-flex items-center space-x-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow transition-all">
-                    <Camera className="w-4 h-4" />
-                    <span>Choose Image File</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              )}
-
-              {/* Statutory Samples Catalog */}
-              {mode === 'samples' && (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400">
-                    Test the real packaging identification engine instantly using official legal metrology pre-packaged commodities:
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {SAMPLE_PACKAGES.map((sample) => (
-                      <div
-                        key={sample.id}
-                        onClick={() => handleSelectSample(sample)}
-                        className="p-3 bg-slate-950 border border-slate-800 hover:border-blue-500/80 rounded-xl cursor-pointer transition-all flex items-center space-x-3 group"
-                      >
-                        <img
-                          src={sample.previewUrl}
-                          alt={sample.name}
-                          className="w-16 h-16 object-cover rounded-lg bg-slate-900 border border-slate-800 shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-white group-hover:text-blue-400 truncate">
-                              {sample.name}
-                            </span>
-                            <span className="text-[10px] font-mono text-emerald-400 font-bold shrink-0 ml-1">
-                              ₹ {sample.expectedData.mrp.toFixed(2)}
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-slate-400 block truncate">
-                            {sample.brand} • {sample.expectedData.netQuantity}
-                          </span>
-                          <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
-                            {sample.description}
-                          </span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-transform" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -405,10 +380,10 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
                   <img
                     src={capturedImage}
                     alt="Packaging Evidence Capture"
-                    className="w-full aspect-video md:aspect-square object-cover rounded-lg"
+                    className="w-full aspect-video md:aspect-square object-contain bg-slate-900 rounded-lg"
                   />
                   <div className="mt-2 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400 font-mono">Captured Packaging</span>
+                    <span className="text-slate-400 font-mono">Real Field Capture</span>
                     <button
                       type="button"
                       onClick={handleRetake}
@@ -426,9 +401,9 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
                     <div className="p-8 border border-blue-500/40 bg-blue-950/20 rounded-xl text-center space-y-3">
                       <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
                       <div>
-                        <h4 className="text-sm font-bold text-white">Analyzing Packaging Panel via AI Vision...</h4>
+                        <h4 className="text-sm font-bold text-white">Analyzing Real Packaging Image via AI Vision...</h4>
                         <p className="text-xs text-slate-400 mt-1">
-                          Extracting Rule 6 declarations, MRP stamp, Net Quantity, and Manufacturer details.
+                          Reading text, MRP, net quantity, batch numbers, and manufacturer declarations.
                         </p>
                       </div>
                     </div>
@@ -437,14 +412,14 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                          <span className="text-sm font-bold text-white">Product Identified Successfully</span>
+                          <span className="text-sm font-bold text-white">Extracted Packaging Declarations</span>
                         </div>
                         <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-900/60 px-2 py-0.5 rounded">
                           Confidence {(extractedData.confidenceScore * 100).toFixed(1)}%
                         </span>
                       </div>
                       <p className="text-xs text-emerald-200/80">
-                        Real commodity parameters detected from packaging image. You can apply these directly to the inspection dossier without manual typing.
+                        Review and adjust any fields below before applying to the inspection docket.
                       </p>
                     </div>
                   ) : null}
@@ -454,66 +429,130 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
                         <span className="text-slate-400 block text-[10px] font-mono">NET QUANTITY</span>
-                        <strong className="text-white text-sm">{extractedData.netQuantity}</strong>
+                        <strong className="text-white text-sm">{extractedData.netQuantity || 'Pending'}</strong>
                       </div>
                       <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
                         <span className="text-slate-400 block text-[10px] font-mono">RETAIL PRICE (MRP)</span>
-                        <strong className="text-emerald-400 text-sm">₹ {extractedData.mrp.toFixed(2)}</strong>
+                        <strong className="text-emerald-400 text-sm">₹ {Number(extractedData.mrp || 0).toFixed(2)}</strong>
                       </div>
                       <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
                         <span className="text-slate-400 block text-[10px] font-mono">UNIT SALE PRICE</span>
-                        <strong className="text-blue-300 text-sm">{extractedData.unitSalePrice}</strong>
+                        <strong className="text-blue-300 text-sm">{extractedData.unitSalePrice || '—'}</strong>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Detailed Extracted Real Data Fields Table */}
+              {/* Editable Real Data Fields Form */}
               {extractedData && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
-                      <Tag className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Extracted Statutory Declarations (PCR 2011)</span>
+                      <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Verify & Edit Extracted Details</span>
                     </h4>
                     <span className="text-[11px] text-slate-400">
-                      All fields populated from image
+                      Editable for 100% accuracy
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <span className="text-slate-400 text-[10px] block uppercase font-mono">Commodity Name</span>
-                      <strong className="text-white text-sm">{extractedData.productName}</strong>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Commodity / Product Name *</label>
+                      <input
+                        type="text"
+                        value={extractedData.productName}
+                        onChange={(e) => handleFieldChange('productName', e.target.value)}
+                        placeholder="e.g. Pure Mustard Oil"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium focus:outline-none focus:border-blue-500"
+                      />
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <span className="text-slate-400 text-[10px] block uppercase font-mono">Brand & Category</span>
-                      <span className="text-slate-200 font-medium">{extractedData.brand} ({extractedData.category})</span>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Brand Name</label>
+                      <input
+                        type="text"
+                        value={extractedData.brand}
+                        onChange={(e) => handleFieldChange('brand', e.target.value)}
+                        placeholder="e.g. Fortune"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium focus:outline-none focus:border-blue-500"
+                      />
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <span className="text-slate-400 text-[10px] block uppercase font-mono">Month & Year of Packing</span>
-                      <span className="text-slate-200 font-mono font-medium">{extractedData.monthYearOfManufacture}</span>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Declared Net Quantity *</label>
+                      <input
+                        type="text"
+                        value={extractedData.netQuantity}
+                        onChange={(e) => handleFieldChange('netQuantity', e.target.value)}
+                        placeholder="e.g. 1 L or 500 g or 5 kg"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium focus:outline-none focus:border-blue-500"
+                      />
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <span className="text-slate-400 text-[10px] block uppercase font-mono">Batch / Lot Identifier</span>
-                      <span className="text-slate-200 font-mono">{extractedData.batchNumber}</span>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Maximum Retail Price (₹ MRP) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={extractedData.mrp || ''}
+                        onChange={(e) => handleFieldChange('mrp', parseFloat(e.target.value) || 0)}
+                        placeholder="e.g. 175.00"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium focus:outline-none focus:border-blue-500"
+                      />
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 sm:col-span-2">
-                      <span className="text-slate-400 text-[10px] block uppercase font-mono">Manufacturer / Packer</span>
-                      <strong className="text-slate-100 block">{extractedData.manufacturerName}</strong>
-                      <span className="text-slate-400 text-[11px] block mt-0.5">{extractedData.manufacturerAddress}</span>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Month & Year of Packing (MM/YYYY)</label>
+                      <input
+                        type="text"
+                        value={extractedData.monthYearOfManufacture}
+                        onChange={(e) => handleFieldChange('monthYearOfManufacture', e.target.value)}
+                        placeholder="e.g. 08/2026"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:outline-none focus:border-blue-500"
+                      />
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 sm:col-span-2">
-                      <span className="text-slate-400 text-[10px] block uppercase font-mono">Consumer Care & Origin</span>
-                      <span className="text-slate-300 block">{extractedData.consumerCareDetails}</span>
-                      <span className="text-slate-500 text-[10px] block mt-0.5">Country of Origin: {extractedData.countryOfOrigin}</span>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Batch / Lot Identifier</label>
+                      <input
+                        type="text"
+                        value={extractedData.batchNumber}
+                        onChange={(e) => handleFieldChange('batchNumber', e.target.value)}
+                        placeholder="e.g. LOT-2026-B891"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 sm:col-span-2 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Manufacturer / Packer Name & Address</label>
+                      <input
+                        type="text"
+                        value={extractedData.manufacturerName}
+                        onChange={(e) => handleFieldChange('manufacturerName', e.target.value)}
+                        placeholder="e.g. Adani Wilmar Limited"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium focus:outline-none focus:border-blue-500 mb-1"
+                      />
+                      <input
+                        type="text"
+                        value={extractedData.manufacturerAddress}
+                        onChange={(e) => handleFieldChange('manufacturerAddress', e.target.value)}
+                        placeholder="e.g. Fortune House, Ahmedabad, Gujarat 380009"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-300 text-xs focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 sm:col-span-2 space-y-1">
+                      <label className="text-slate-400 text-[10px] block uppercase font-mono">Consumer Care Contact</label>
+                      <input
+                        type="text"
+                        value={extractedData.consumerCareDetails}
+                        onChange={(e) => handleFieldChange('consumerCareDetails', e.target.value)}
+                        placeholder="e.g. 1800-233-9999 | care@brand.com"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-300 text-xs focus:outline-none focus:border-blue-500"
+                      />
                     </div>
                   </div>
 
