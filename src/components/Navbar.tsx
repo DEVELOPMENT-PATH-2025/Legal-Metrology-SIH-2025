@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-base sm:text-lg tracking-tight text-white">
-                  Veriqo - LEGAL METROLOGY
+                  Veriqo - Legal Metrology
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded font-mono font-semibold bg-slate-800 text-blue-400 border border-slate-700">
                   PCR-2011
@@ -71,8 +71,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               id="nav-welcome-btn"
               onClick={() => onNavigate('welcome')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 ${activeView === 'welcome'
-                  ? 'bg-slate-800 text-blue-400 border border-slate-700 shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                ? 'bg-slate-800 text-blue-400 border border-slate-700 shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                 }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
