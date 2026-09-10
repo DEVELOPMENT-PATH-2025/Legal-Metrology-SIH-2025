@@ -14,15 +14,20 @@ import {
   EyeOff,
   Building,
   Award,
-  LogOut
+  LogOut,
+  ExternalLink,
+  ArrowUpRight
 } from 'lucide-react';
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword 
+  signInWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db, googleProvider, DEMO_USERS } from '../lib/firebase';
+import { auth, db, googleProvider, DEMO_USERS, firebaseConfig } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types';
 
 interface AuthModalProps {
@@ -52,8 +57,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
   const [jurisdiction, setJurisdiction] = useState('Zone 4 - Regional Metrology Division');
   const [badgeNumber, setBadgeNumber] = useState('');
-  const [statusNotice, setStatusNotice] = useState<{ type: 'info' | 'error'; text: string } | null>(null);
+  const [statusNotice, setStatusNotice] = useState<{ 
+    type: 'info' | 'error'; 
+    text: string;
+    code?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Check for Google OAuth redirect results on mount
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user) {
+          const user = result.user;
+          const role: UserRole = selectedRole;
+          const profile: UserProfile = {
+            uid: user.uid,
+            email: user.email || 'authenticated@metrology.gov.in',
+            displayName: user.displayName || 'Legal Metrology Officer',
+            role,
+            badgeNumber: `LM-${role.toUpperCase()}-${user.uid.slice(0, 5).toUpperCase()}`,
+            photoURL: user.photoURL || undefined,
+            jurisdiction: jurisdiction || 'Central Enforcement Directorate',
+            createdAt: new Date().toISOString()
+          };
+
+          try {
+            await setDoc(doc(db, 'users', user.uid), profile, { merge: true });
+          } catch (saveErr) {
+            console.warn('Firestore profile sync note:', saveErr);
+          }
+
+          onAuthenticated(profile, 'OAuth 2.0 via Google Redirect');
+          onClose();
+        }
+      })
+      .catch((err) => {
+        console.warn('Google redirect result exception:', err);
+      });
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -66,6 +108,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [isOpen, initialTab, initialRole]);
 
   if (!isOpen) return null;
+
+  // Google OAuth via Page Redirect (fallback when popups are blocked)
+  const handleGoogleRedirectSignIn = async () => {
+    try {
+      setLoading(true);
+      setStatusNotice(null);
+      await signInWithRedirect(auth, googleProvider);
+    } catch (err: any) {
+      console.warn('Google redirect sign-in exception:', err);
+      setStatusNotice({
+        type: 'error',
+        text: err?.message || 'Unable to start Google redirect.',
+        code: err?.code
+      });
+      setLoading(false);
+    }
+  };
 
   // Google OAuth Login
   const handleGoogleSignIn = async () => {
@@ -98,30 +157,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClose();
     } catch (err: any) {
       const code = err?.code || '';
+      console.warn('Google sign-in exception code:', code, err?.message || err);
+
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        // User closed or dismissed the popup window before finishing.
-        // This is normal interactive user behavior, not an application crash.
-        console.info('Google Sign-in popup dismissed by user.');
         setStatusNotice({
           type: 'info',
+          code,
           text: 'Google Sign-in window was closed. Click "Continue with Google" again or use the Email & Password form below.'
         });
       } else if (code === 'auth/popup-blocked') {
-        console.warn('Google Sign-in popup blocked by browser policy.');
         setStatusNotice({
           type: 'error',
-          text: 'The sign-in popup was blocked by browser settings. Please allow popups or use Email & Password below.'
+          code: 'auth/popup-blocked',
+          text: 'The sign-in popup was blocked by your browser settings. You can try with Page Redirect or use Email & Password below.'
         });
       } else if (code === 'auth/unauthorized-domain') {
-        console.warn('Firebase unauthorized domain for Google OAuth.');
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'current domain';
+        const isIp = host === '127.0.0.1' || host.startsWith('192.168.') || host === '0.0.0.0';
         setStatusNotice({
           type: 'error',
-          text: 'This domain is not authorized in Firebase OAuth settings. Please use the Email & Password form below.'
+          code: 'auth/unauthorized-domain',
+          text: isIp
+            ? `Domain "${host}" is an IP address not authorized in Firebase OAuth settings. Switching your browser address to "http://localhost:3000" will enable Google Sign-In, or use Email & Password below.`
+            : `Domain "${host}" is not authorized in Firebase Console settings for project "${firebaseConfig.projectId}". Please add "${host}" to Authentication > Settings > Authorized domains, or use Email & Password below.`
         });
       } else {
-        console.warn('Google sign-in exception:', err?.message || err);
         setStatusNotice({
           type: 'error',
+          code,
           text: err?.message || 'Unable to complete Google Sign-in. Please use Email & Password below.'
         });
       }
@@ -156,19 +219,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       if (tab === 'signup') {
-        let authUid = `usr-${Date.now()}`;
-        try {
-          // Attempt Firebase Auth user registration
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          authUid = userCredential.user.uid;
-        } catch (authErr: any) {
-          console.warn('Firebase createUser note (proceeding with profile):', authErr);
+        // 1. Real Firebase Auth User Registration
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const authUid = userCredential.user.uid;
+
+        // 2. Set Firebase Auth Display Name
+        if (displayName && userCredential.user) {
+          try {
+            await updateProfile(userCredential.user, { displayName });
+          } catch (pErr) {
+            console.warn('Profile update displayName error:', pErr);
+          }
         }
 
         const generatedBadge = badgeNumber || `LM-${role.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
         const profile: UserProfile = {
           uid: authUid,
-          email,
+          email: userCredential.user.email || email,
           displayName: displayName || (email.split('@')[0].toUpperCase()),
           role,
           badgeNumber: generatedBadge,
@@ -176,49 +243,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           createdAt: new Date().toISOString()
         };
 
-        // Save to Firestore
+        // 3. Persist official officer profile to Firestore
         try {
           await setDoc(doc(db, 'users', authUid), profile, { merge: true });
         } catch (dbErr) {
-          console.warn('Firestore profile save queued:', dbErr);
+          console.warn('Firestore profile sync note:', dbErr);
         }
 
         onAuthenticated(profile, password);
         onClose();
       } else {
-        // Login tab
-        let authUid = `usr-${Date.now()}`;
+        // 1. Real Firebase Auth Sign In
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const authUid = userCredential.user.uid;
+        
+        // 2. Fetch official profile from Firestore
         let loadedProfile: UserProfile | null = null;
         try {
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          authUid = userCredential.user.uid;
           const userDoc = await getDoc(doc(db, 'users', authUid));
           if (userDoc.exists()) {
             loadedProfile = userDoc.data() as UserProfile;
           }
-        } catch (authErr: any) {
-          console.warn('Firebase signIn note:', authErr);
+        } catch (fetchErr) {
+          console.warn('Could not read existing profile from Firestore:', fetchErr);
         }
 
         const profile: UserProfile = loadedProfile ? {
           ...loadedProfile,
-          role,
-          badgeNumber: badgeNumber || loadedProfile.badgeNumber || `LM-${role.toUpperCase()}-8821`
+          role, // allow updating operational role context
+          badgeNumber: badgeNumber || loadedProfile.badgeNumber || `LM-${role.toUpperCase()}-${authUid.slice(0, 5).toUpperCase()}`
         } : {
           uid: authUid,
-          email,
-          displayName: displayName || (email.split('@')[0].toUpperCase()),
+          email: userCredential.user.email || email,
+          displayName: userCredential.user.displayName || displayName || (email.split('@')[0].toUpperCase()),
           role,
-          badgeNumber: badgeNumber || `LM-${role.toUpperCase()}-8821`,
+          badgeNumber: badgeNumber || `LM-${role.toUpperCase()}-${authUid.slice(0, 5).toUpperCase()}`,
           jurisdiction: jurisdiction || 'Central Enforcement Circle',
           createdAt: new Date().toISOString()
         };
 
-        // Update role in Firestore if changed
+        // 3. Update profile / role in Firestore
         try {
-          await setDoc(doc(db, 'users', authUid), { role }, { merge: true });
+          await setDoc(doc(db, 'users', authUid), profile, { merge: true });
         } catch (dbErr) {
-          console.warn('Firestore profile update queued:', dbErr);
+          console.warn('Firestore profile update note:', dbErr);
         }
 
         onAuthenticated(profile, password);
@@ -226,6 +294,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } catch (err: any) {
       const code = err?.code || '';
+      console.warn('Firebase Auth error encountered:', code, err?.message || err);
+
       if (code === 'auth/email-already-in-use') {
         setStatusNotice({
           type: 'error',
@@ -234,20 +304,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
         setStatusNotice({
           type: 'error',
-          text: 'Invalid officer credentials. Please verify your email and password, or create a new account.'
+          text: 'Invalid officer credentials. Please verify your email and password, or click "Apply Now / Register" to create an officer account.'
         });
       } else if (code === 'auth/weak-password') {
         setStatusNotice({
           type: 'error',
-          text: 'Password should be at least 6 characters long.'
+          text: 'Password should be at least 6 characters long for statutory officer security.'
         });
       } else if (code === 'auth/invalid-email') {
         setStatusNotice({
           type: 'error',
           text: 'Please provide a valid official email address.'
         });
+      } else if (code === 'auth/network-request-failed') {
+        setStatusNotice({
+          type: 'error',
+          text: 'Network connectivity error. Please check your internet connection, or explore with the Role Sandbox tab.'
+        });
+      } else if (code === 'auth/too-many-requests') {
+        setStatusNotice({
+          type: 'error',
+          text: 'Too many attempts. Access is temporarily suspended. Please wait a minute and try again.'
+        });
       } else {
-        console.warn('Authentication note:', err?.message || err);
         setStatusNotice({
           type: 'error',
           text: err?.message || 'Authentication failed. Please check credentials.'
@@ -354,18 +433,62 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {statusNotice && (
             <div
-              className={`p-3 rounded-xl flex items-center space-x-2.5 text-xs border transition-all ${
+              className={`p-3.5 rounded-xl text-xs border transition-all ${
                 statusNotice.type === 'info'
                   ? 'bg-blue-950/40 border-blue-800/80 text-blue-200'
                   : 'bg-rose-950/50 border-rose-800 text-rose-300'
               }`}
             >
-              {statusNotice.type === 'info' ? (
-                <Info className="w-4 h-4 text-blue-400 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              )}
-              <span>{statusNotice.text}</span>
+              <div className="flex items-start space-x-2.5">
+                {statusNotice.type === 'info' ? (
+                  <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 space-y-2">
+                  <p className="leading-relaxed">{statusNotice.text}</p>
+
+                  {/* Actions for Unauthorized Domain */}
+                  {statusNotice.code === 'auth/unauthorized-domain' && (
+                    <div className="pt-2 border-t border-rose-800/60 flex flex-wrap gap-2">
+                      {typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === '0.0.0.0') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.location.href = window.location.href.replace(window.location.hostname, 'localhost');
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition-colors shadow flex items-center gap-1"
+                        >
+                          <span>Switch to http://localhost:3000</span>
+                          <ArrowUpRight className="w-3 h-3" />
+                        </button>
+                      )}
+                      <a
+                        href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 font-semibold text-[11px] inline-flex items-center gap-1 transition-colors"
+                      >
+                        <span>Open Firebase Authorized Domains</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Actions for Popup Blocked */}
+                  {statusNotice.code === 'auth/popup-blocked' && (
+                    <div className="pt-2 border-t border-rose-800/60">
+                      <button
+                        type="button"
+                        onClick={handleGoogleRedirectSignIn}
+                        className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition-colors shadow"
+                      >
+                        Try Sign-In with Page Redirect
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

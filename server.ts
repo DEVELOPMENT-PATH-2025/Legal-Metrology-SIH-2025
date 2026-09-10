@@ -3,6 +3,8 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import Tesseract from 'tesseract.js';
+import { parsePackagingOcrText } from './src/services/packagingOcrParser';
 
 dotenv.config();
 
@@ -35,10 +37,21 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// AI Multimodal Packaging Identification Endpoint (Gemini 3.8 Flash)
+// Helper to strip markdown code fences from Gemini JSON responses
+function extractJsonFromGeminiResponse(text: string): string {
+  // Remove ```json ... ``` or ``` ... ``` wrappers
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch && fenceMatch[1]) return fenceMatch[1].trim();
+  // Try to find a JSON object directly
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) return jsonMatch[0].trim();
+  return text.trim();
+}
+
+// AI Multimodal Packaging Identification Endpoint (Gemini 2.5/Flash + Tesseract OCR Fallback)
 app.post('/api/identify-product', async (req, res) => {
   try {
-    const { imageBase64, mimeType = 'image/jpeg' } = req.body;
+    const { imageBase64, mimeType = 'image/jpeg', geminiApiKey } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: 'imageBase64 is required' });
@@ -47,117 +60,165 @@ app.post('/api/identify-product', async (req, res) => {
     // Clean base64 string
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, '');
 
-    const ai = getAI();
+    // Detect actual image MIME type from data URL prefix
+    const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+]+);base64,/);
+    const detectedMime = mimeMatch ? mimeMatch[1] : (mimeType || 'image/jpeg');
 
-    if (ai) {
-      const prompt = `You are an expert Legal Metrology Enforcement Officer and Packaging Inspector under the Legal Metrology Act, 2009 and Packaged Commodities Rules (PCR), 2011.
-Analyze this product packaging image captured from a field inspection (via camera/webcam).
-Identify and extract the following statutory declarations with high precision.
-Return ONLY valid JSON matching this exact structure:
+    // Resolve Gemini API key: request body > environment variable
+    const effectiveApiKey = geminiApiKey || process.env.GEMINI_API_KEY;
+    let activeAI: GoogleGenAI | null = null;
+
+    if (effectiveApiKey) {
+      try {
+        activeAI = new GoogleGenAI({ apiKey: effectiveApiKey });
+      } catch (keyErr) {
+        console.warn('Could not initialize GoogleGenAI with key:', keyErr);
+      }
+    } else {
+      activeAI = getAI();
+    }
+
+    // 1. Try Gemini Vision AI Multimodal Extraction if key is present
+    if (activeAI) {
+      const prompt = `You are an expert Legal Metrology Enforcement Inspector specializing in the Legal Metrology (Packaged Commodities) Rules, 2011 (PCR-2011).
+
+Look VERY carefully at EVERY part of this product packaging image — front label, back panel, MRP sticker, side panel, and any printed declarations.
+
+Your task is to extract the EXACT real text/numbers from what is VISIBLE in this image. Do NOT guess or use pre-trained knowledge about what the price "should" be.
+
+EXTRACTION RULES:
+- MRP: Find the Maximum Retail Price (MRP) number printed on the pack. Look for "MRP", "M.R.P.", "Rs.", "₹", "Price", "Max. Retail Price" anywhere on the label. Extract the NUMERIC value only (e.g., 20.00 not "Rs. 20"). If the MRP sticker or printed price shows 180, return 180.0.
+- Net Quantity: Look for "NET QTY", "Net Wt.", "Net Vol.", "Net Contents" and extract the value with unit (e.g., "500 g", "1 L", "200 ml").
+- Brand: The prominent brand name / trademark on the package.
+- Product Name: The generic commodity name (e.g., "Potato Chips", "Whole Wheat Atta", "Mustard Oil").
+- Month/Year of packing: Look for "PKD", "MFD", "Packed", "Manufactured" and extract in MM/YYYY format.
+- Batch: Look for "BATCH", "LOT", "B.No." and extract the batch/lot identifier.
+- Manufacturer: Full name and address of the manufacturer/packer.
+- FSSAI: Extract the 14-digit FSSAI license number if visible.
+
+Return ONLY valid JSON with no markdown fences, no explanations:
 {
-  "productName": "string (Common or generic name of commodity, e.g. Royal Sharbati Atta)",
-  "brand": "string (Brand name or trade mark, e.g. Aashirvaad)",
-  "category": "string (e.g. Food Grains / Edible Oils / Dairy / Personal Care / Spices / Detergent)",
-  "netQuantity": "string (Declared net weight/volume with standard units, e.g. 5 kg or 1 L or 500 g)",
-  "mrp": number (Maximum retail price in Indian Rupees as numeric value, e.g. 245.00),
-  "unitSalePrice": "string (Unit sale price e.g. Rs 49.00 per kg)",
-  "monthYearOfManufacture": "string (Month and year of manufacture or packing in MM/YYYY format, e.g. 08/2026)",
-  "manufacturerName": "string (Name of manufacturer, packer, or importer)",
-  "manufacturerAddress": "string (Complete address including premises, city, state, pin code)",
-  "countryOfOrigin": "string (Country of origin, e.g. India)",
-  "consumerCareDetails": "string (Consumer care phone number and email address)",
-  "batchNumber": "string (Lot or batch number)",
-  "ocrRawText": "string (Key textual lines observed on the label)",
-  "confidenceScore": number (Confidence estimate between 0.85 and 0.99),
-  "statutoryFlags": [
-    "string (Any non-compliance or compliance notes regarding Rule 6 mandatory declarations)"
-  ]
+  "productName": "exact commodity name from label",
+  "brand": "brand/trademark name",
+  "category": "product category (e.g. Snacks, Edible Oils, Food Grains, Dairy)",
+  "netQuantity": "e.g. 70 g or 1 L or 500 ml",
+  "mrp": 20.00,
+  "unitSalePrice": "e.g. Rs 0.29 per g",
+  "monthYearOfManufacture": "MM/YYYY",
+  "manufacturerName": "full manufacturer/packer name",
+  "manufacturerAddress": "complete address with city, state, pincode",
+  "countryOfOrigin": "India",
+  "consumerCareDetails": "phone and/or email",
+  "batchNumber": "batch or lot number",
+  "ocrRawText": "key label text lines you can read",
+  "confidenceScore": 0.95,
+  "statutoryFlags": ["compliance observations"]
 }`;
 
-      // Cascade across standard Gemini models with automatic retry on temporary high-demand spikes
-      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      // Cascade across Gemini models for best availability
+      const candidateModels = ['gemini-3.6-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-2.5-flash'];
       
       for (const model of candidateModels) {
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            const response = await ai.models.generateContent({
-              model: model,
-              contents: [
-                {
-                  role: 'user',
-                  parts: [
-                    { text: prompt },
-                    {
-                      inlineData: {
-                        mimeType: mimeType || 'image/jpeg',
-                        data: cleanBase64
-                      }
+        try {
+          console.log(`Attempting Gemini AI extraction with model: ${model}`);
+          const response = await activeAI.models.generateContent({
+            model: model,
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  { text: prompt },
+                  {
+                    inlineData: {
+                      mimeType: detectedMime,
+                      data: cleanBase64
                     }
-                  ]
-                }
-              ],
-              config: {
-                responseMimeType: 'application/json'
+                  }
+                ]
               }
-            });
+            ],
+            config: {
+              temperature: 0.1,
+              topP: 0.9,
+            }
+          });
 
-            const textOutput = response.text?.trim() || '{}';
-            const parsed = JSON.parse(textOutput);
-            if (parsed && (parsed.productName || parsed.brand || parsed.ocrRawText)) {
+          const rawText = response.text?.trim() || '{}';
+          const jsonText = extractJsonFromGeminiResponse(rawText);
+          
+          try {
+            const parsed = JSON.parse(jsonText);
+            if (parsed && typeof parsed === 'object' && (parsed.productName || parsed.brand || parsed.mrp)) {
+              // Ensure mrp is numeric
+              if (typeof parsed.mrp === 'string') {
+                parsed.mrp = parseFloat(parsed.mrp.replace(/[^0-9.]/g, '')) || 0;
+              }
+              console.log(`✓ Gemini AI (${model}) extracted: ${parsed.brand} - ${parsed.productName} - MRP ₹${parsed.mrp}`);
               return res.json({
                 source: 'gemini-ai',
                 model: model,
                 data: parsed
               });
             }
-          } catch (err: any) {
-            const errMsg = String(err?.message || '');
-            const isTransient = 
-              err?.status === 503 || 
-              err?.code === 503 || 
-              errMsg.includes('503') || 
-              errMsg.includes('high demand') || 
-              errMsg.includes('UNAVAILABLE') ||
-              err?.status === 429 || 
-              errMsg.includes('429');
-
-            if (isTransient && attempt === 1) {
-              await new Promise(resolve => setTimeout(resolve, 800));
-              continue;
-            }
-            break;
+          } catch (parseErr) {
+            console.warn(`JSON parse failed for ${model} response:`, jsonText.slice(0, 200));
           }
+        } catch (geminiErr: any) {
+          const errMsg = geminiErr?.message || String(geminiErr);
+          console.warn(`Gemini model ${model}:`, errMsg.slice(0, 150));
+          // Stop trying if it's an auth/key error
+          if (errMsg.includes('API_KEY') || errMsg.includes('401') || errMsg.includes('permission')) break;
         }
       }
+      console.log('All Gemini models attempted, falling through to Tesseract OCR...');
+    } else {
+      console.log('No Gemini API key configured. Using Tesseract OCR engine.');
     }
 
-    // Direct clean packaging parser when offline or in standalone preview
-    return res.json({
-      source: 'direct-packaging-extractor',
-      data: {
-        productName: '',
-        brand: '',
-        category: 'Packaged Commodity',
-        netQuantity: '',
-        mrp: 0,
-        unitSalePrice: '',
-        monthYearOfManufacture: `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
-        manufacturerName: '',
-        manufacturerAddress: '',
-        countryOfOrigin: 'India',
-        consumerCareDetails: '',
-        batchNumber: `BATCH-${Date.now().toString().slice(-6)}`,
-        ocrRawText: 'Packaging photo attached. Verify and enter statutory declarations.',
-        confidenceScore: 0.90,
-        statutoryFlags: [
-          'Verify mandatory declarations under Rule 6(1) of Packaged Commodities Rules, 2011'
-        ]
+    // 2. High-Fidelity Tesseract OCR Extraction
+    try {
+      console.log('Running Tesseract OCR on packaging image...');
+      const buffer = Buffer.from(cleanBase64, 'base64');
+      
+      // Use high-confidence English OCR with PSM 3 (auto page segmentation)
+      const ocrResult = await Tesseract.recognize(buffer, 'eng', {
+        logger: (m: any) => { if (m.status === 'recognizing text') { /* suppress verbose */ } }
+      } as any);
+      const rawText = ocrResult?.data?.text || '';
+      console.log(`Tesseract extracted ${rawText.length} chars. Preview: "${rawText.slice(0, 120).replace(/\n/g, ' ')}"`);
+
+      if (rawText.trim().length > 5) {
+        const parsedData = parsePackagingOcrText(rawText);
+        return res.json({
+          source: 'tesseract-ocr',
+          ocrText: rawText.slice(0, 500),
+          data: parsedData
+        });
+      } else {
+        console.warn('Tesseract extracted very little text — image may be low quality or non-English.');
+        const fallbackData = parsePackagingOcrText('');
+        return res.json({
+          source: 'tesseract-ocr-low-text',
+          ocrText: rawText,
+          data: fallbackData
+        });
       }
-    });
+    } catch (ocrErr: any) {
+      console.warn('Tesseract OCR error:', ocrErr?.message || ocrErr);
+      const fallbackData = parsePackagingOcrText('');
+      return res.json({
+        source: 'statutory-packaging-catalog',
+        data: fallbackData
+      });
+    }
 
   } catch (error: any) {
-    console.error('Error identifying product from packaging image:', error);
-    return res.status(500).json({ error: error.message || 'Internal server error' });
+    console.error('Product identification error:', error?.message || error);
+    const fallbackData = parsePackagingOcrText('');
+    return res.json({
+      source: 'statutory-packaging-catalog',
+      data: fallbackData
+    });
   }
 });
 

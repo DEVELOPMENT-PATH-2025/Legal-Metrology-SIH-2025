@@ -12,6 +12,7 @@ import {
 import { UserProfile } from '../types';
 import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '../context/ThemeContext';
+import { isFirebaseAuthActive, auth, firebaseConfig } from '../lib/firebase';
 
 export type ActiveAppView = 'welcome' | 'inspections' | 'workspace' | 'oversight' | 'thankyou';
 
@@ -108,14 +109,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </button>
 
-              {/* Authenticated Officer Session Popover - Profile Info and Selected Role ONLY */}
+              {/* Authenticated Officer Session Popover */}
               {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-2xl bg-slate-900 border border-slate-700 p-3 z-50 text-slate-200 backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 mt-2 w-72 rounded-xl shadow-2xl bg-slate-900 border border-slate-700 p-3 z-50 text-slate-200 backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="pb-2 border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase font-mono tracking-wider flex items-center justify-between">
                     <span>OFFICER SESSION</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono font-bold">
-                      AUTHENTICATED
-                    </span>
+                    {isFirebaseAuthActive() ? (
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        FIREBASE AUTH
+                      </span>
+                    ) : (
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800 font-mono font-bold">
+                        ROLE SANDBOX
+                      </span>
+                    )}
                   </div>
                   
                   {/* Profile info */}
@@ -128,6 +136,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <span className="text-slate-200 font-semibold">{currentUser.badgeNumber}</span>
                       </p>
                     )}
+                    {auth.currentUser && (
+                      <p className="text-[10px] font-mono text-slate-500 truncate" title={`Firebase UID: ${auth.currentUser.uid}`}>
+                        UID: <span className="text-slate-400">{auth.currentUser.uid.slice(0, 12)}...</span>
+                      </p>
+                    )}
+                    <p className="text-[10px] font-mono text-slate-500 truncate">
+                      Project: <span className="text-slate-400">{firebaseConfig.projectId}</span>
+                    </p>
                   </div>
 
                   {/* Selected Role during authentication */}
@@ -147,6 +163,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {!isFirebaseAuthActive() && (
+                    <div className="py-2 border-b border-slate-800">
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          onOpenAuth('login');
+                        }}
+                        className="w-full text-center py-2 px-3 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                      >
+                        Sign In with Firebase
+                      </button>
+                    </div>
+                  )}
 
                   {/* Quick Theme Toggle option inside menu */}
                   <div className="py-2 border-b border-slate-800">

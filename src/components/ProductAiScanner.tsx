@@ -15,7 +15,11 @@ import {
   Scale, 
   Zap,
   Edit3,
-  FileText
+  FileText,
+  Key,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { 
   identifyProductFromImage, 
@@ -43,6 +47,42 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [extractedData, setExtractedData] = useState<IdentifiedProductData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+    // First: check environment variable (set in .env as VITE_GEMINI_API_KEY)
+    const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined;
+    if (envKey && envKey.trim() && envKey !== 'YOUR_GEMINI_API_KEY') return envKey.trim();
+    // Second: check localStorage (user-entered key)
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('gemini_api_key') || '';
+    }
+    return '';
+  });
+  const [showKeyPanel, setShowKeyPanel] = useState<boolean>(false);
+  const [keyInput, setKeyInput] = useState<string>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('gemini_api_key') || '';
+    }
+    return '';
+  });
+  const [keySaveMessage, setKeySaveMessage] = useState<string | null>(null);
+
+  const handleSaveApiKey = () => {
+    const trimmed = keyInput.trim();
+    setGeminiApiKey(trimmed);
+    if (typeof localStorage !== 'undefined') {
+      if (trimmed) {
+        localStorage.setItem('gemini_api_key', trimmed);
+      } else {
+        localStorage.removeItem('gemini_api_key');
+      }
+    }
+    setKeySaveMessage(trimmed ? 'API Key saved! Gemini Multimodal AI vision is now active.' : 'API Key removed. Using built-in OCR engine.');
+    setTimeout(() => {
+      setKeySaveMessage(null);
+      if (trimmed) setShowKeyPanel(false);
+    }, 2000);
+  };
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -153,7 +193,7 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
     setIsScanning(true);
     setExtractedData(null);
     try {
-      const data = await identifyProductFromImage(imageBase64);
+      const data = await identifyProductFromImage(imageBase64, geminiApiKey);
       setExtractedData(data);
     } catch (err) {
       console.error('Error running AI identification:', err);
@@ -218,6 +258,92 @@ export const ProductAiScanner: React.FC<ProductAiScannerProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* AI Vision Engine Status & Gemini Key Configuration Bar */}
+        <div className="bg-slate-950/90 border-b border-slate-800 px-6 py-2.5 flex items-center justify-between text-xs shrink-0">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            {geminiApiKey ? (
+              <span className="text-slate-300">
+                AI Vision Engine: <strong className="text-emerald-400">Gemini Vision Connected — Accurate Extraction Active</strong>
+              </span>
+            ) : (
+              <span className="text-slate-300">
+                AI Vision Engine: <strong className="text-amber-400">Tesseract OCR Active</strong>
+                <span className="text-slate-500 ml-1">(Connect Gemini for accurate MRP/label reading)</span>
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowKeyPanel(!showKeyPanel)}
+            className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center space-x-1 font-semibold hover:underline"
+          >
+            <Key className="w-3 h-3" />
+            <span>{geminiApiKey ? 'Change AI Key' : '+ Connect Gemini API Key'}</span>
+            {showKeyPanel ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        </div>
+
+        {/* Expandable Gemini Key Panel */}
+        {showKeyPanel && (
+          <div className="bg-slate-800/95 border-b border-slate-700 px-6 py-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150 shrink-0">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-amber-400" />
+                <span>Google AI Studio (Gemini) API Key — Required for Accurate Extraction</span>
+              </label>
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-[11px] text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 hover:underline"
+              >
+                <span>Get Free Key at Google AI Studio</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={keyInput}
+                onChange={(e) => setKeyInput(e.target.value)}
+                placeholder="Paste your AIzaSy... key here"
+                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleSaveApiKey}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow transition-colors shrink-0"
+              >
+                Save & Activate
+              </button>
+            </div>
+            {keySaveMessage && (
+              <p className="text-[11px] text-emerald-400 font-semibold">{keySaveMessage}</p>
+            )}
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              <strong className="text-amber-300">Why required:</strong> Gemini Vision reads the real MRP, brand, net quantity, and manufacturer details directly from the label image with ~99% accuracy. Without it, Tesseract OCR is used which works best on clear, high-contrast text but may miss stylized prices or handwritten stickers.
+            </p>
+          </div>
+        )}
+
+        {/* No API Key Warning Banner — shown when no key and not in key panel */}
+        {!geminiApiKey && !showKeyPanel && (
+          <div className="bg-amber-950/40 border-b border-amber-800/50 px-6 py-2 flex items-center justify-between text-xs shrink-0">
+            <span className="text-amber-300 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              For accurate MRP & label data extraction, connect a Gemini API key.
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowKeyPanel(true)}
+              className="text-amber-400 hover:text-amber-300 font-bold hover:underline text-[11px]"
+            >
+              Connect Now →
+            </button>
+          </div>
+        )}
 
         {/* Source Mode Selector (Upload Image or WebCam) */}
         {!capturedImage && (

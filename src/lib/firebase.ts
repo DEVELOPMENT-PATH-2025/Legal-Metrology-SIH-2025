@@ -1,25 +1,41 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User
+  User,
+  updateProfile
 } from 'firebase/auth';
 import { 
   getFirestore, 
   doc, 
   getDocFromServer
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import defaultAppletConfig from '../../firebase-applet-config.json';
 import { UserProfile, UserRole } from '../types';
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Dynamic Firebase Configuration supporting both .env and firebase-applet-config.json
+export const firebaseConfig = {
+  apiKey: (import.meta.env?.VITE_FIREBASE_API_KEY as string) || defaultAppletConfig.apiKey,
+  authDomain: (import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN as string) || defaultAppletConfig.authDomain,
+  projectId: (import.meta.env?.VITE_FIREBASE_PROJECT_ID as string) || defaultAppletConfig.projectId,
+  storageBucket: (import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET as string) || defaultAppletConfig.storageBucket,
+  messagingSenderId: (import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || defaultAppletConfig.messagingSenderId,
+  appId: (import.meta.env?.VITE_FIREBASE_APP_ID as string) || defaultAppletConfig.appId,
+  measurementId: (import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID as string) || defaultAppletConfig.measurementId,
+};
 
-// CRITICAL: Must pass firestoreDatabaseId from firebase-applet-config.json
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firebase App (reuse existing instance during Vite HMR)
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// CRITICAL: Must pass firestoreDatabaseId
+export const firestoreDatabaseId = 
+  (import.meta.env?.VITE_FIREBASE_DATABASE_ID as string) || defaultAppletConfig.firestoreDatabaseId;
+export const db = getFirestore(app, firestoreDatabaseId);
+
+// Firebase Authentication Instance
 export const auth = getAuth(app);
 
 export const googleProvider = new GoogleAuthProvider();
@@ -136,3 +152,12 @@ export async function signOutUser(): Promise<void> {
     console.warn('Firebase signOut error:', err);
   }
 }
+
+export function isFirebaseAuthActive(): boolean {
+  return !!auth.currentUser && !auth.currentUser.isAnonymous;
+}
+
+export function getActiveFirebaseUser(): User | null {
+  return auth.currentUser;
+}
+

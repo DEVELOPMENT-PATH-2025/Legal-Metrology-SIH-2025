@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, DEMO_USERS, signOutUser, GUEST_USER } from './lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db, DEMO_USERS, signOutUser, GUEST_USER } from './lib/firebase';
 import { UserProfile, UserRole, Inspection, AuditEvent } from './types';
 import { CheckCircle2, X } from 'lucide-react';
 import { inspectionService } from './services/inspectionService';
@@ -19,7 +20,7 @@ export default function App() {
   // Current authenticated officer profile (defaults to Inspector demo)
   const [currentUser, setCurrentUser] = useState<UserProfile>(DEMO_USERS.inspector);
   const [submittedPassword, setSubmittedPassword] = useState<string>('LegalMetrology2026!');
-  
+
   // View states: starts at 'welcome' page as requested by user!
   const [currentView, setCurrentView] = useState<ActiveAppView>('welcome');
   const [activeInspectionId, setActiveInspectionId] = useState<string | null>(null);
@@ -43,13 +44,25 @@ export default function App() {
 
   // Listen to Firebase Auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Attempt to fetch saved officer profile from Firestore
+        try {
+          const userSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userSnap.exists()) {
+            setCurrentUser(userSnap.data() as UserProfile);
+            return;
+          }
+        } catch (err) {
+          console.warn('Could not read user profile from Firestore:', err);
+        }
+
+        // Fallback to Firebase Auth user credentials
         setCurrentUser(prev => ({
           ...prev,
           uid: firebaseUser.uid,
           email: firebaseUser.email || prev.email,
-          displayName: firebaseUser.displayName || prev.displayName,
+          displayName: firebaseUser.displayName || prev.displayName || 'Legal Metrology Officer',
           photoURL: firebaseUser.photoURL || undefined,
           role: prev.role || 'inspector',
           badgeNumber: prev.badgeNumber || `LM-${(prev.role || 'inspector').toUpperCase()}-${firebaseUser.uid.slice(0, 5).toUpperCase()}`
@@ -167,7 +180,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
-      
+
       {/* Statutory Header & Navigation */}
       <Navbar
         currentUser={currentUser}
@@ -190,7 +203,7 @@ export default function App() {
 
       {/* Main App Stage */}
       <main className="flex-1 pb-16">
-        
+
         {/* 1. WELCOME PAGE (First Impression & Role Capabilities) */}
         {currentView === 'welcome' && (
           <WelcomePage

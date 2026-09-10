@@ -283,44 +283,107 @@ function createPackagingCanvas(
   return canvas.toDataURL('image/jpeg', 0.92);
 }
 
-// Client service to identify packaging details from image base64
-export async function identifyProductFromImage(imageBase64: string): Promise<IdentifiedProductData> {
-  // 1. First try calling the server AI endpoint (/api/identify-product)
+import { parsePackagingOcrText } from './packagingOcrParser';
+
+// Direct Gemini Vision API call from browser (no server required)
+async function callGeminiDirectly(imageBase64: string, apiKey: string): Promise<IdentifiedProductData | null> {
   try {
+    const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, '');
+    const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+    const prompt = `You are a Legal Metrology Inspector analyzing product packaging per PCR-2011 rules.
+Extract the EXACT text/numbers visible on this packaging label. Do NOT fabricate or assume values.
+
+Look for: MRP (₹ price), Net Qty (weight/volume), Brand name, Product name, Manufacturer name+address, Batch number, Manufacturing/packing date.
+
+Return ONLY this JSON (no markdown):
+{"productName":"","brand":"","category":"","netQuantity":"","mrp":0,"unitSalePrice":"","monthYearOfManufacture":"","manufacturerName":"","manufacturerAddress":"","countryOfOrigin":"India","consumerCareDetails":"","batchNumber":"","ocrRawText":"","confidenceScore":0.9,"statutoryFlags":[]}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: cleanBase64 } }
+            ]
+          }],
+          generationConfig: { temperature: 0.1 }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      console.warn('Gemini direct API error:', response.status, await response.text());
+      return null;
+    }
+
+    const result = await response.json();
+    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Extract JSON from response (may have markdown fences)
+    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const jsonStr = fenceMatch ? fenceMatch[1] : (text.match(/\{[\s\S]*\}/) || [''])[0];
+    
+    const parsed = JSON.parse(jsonStr.trim());
+    if (parsed && (parsed.productName || parsed.brand || parsed.mrp)) {
+      if (typeof parsed.mrp === 'string') {
+        parsed.mrp = parseFloat(parsed.mrp.replace(/[^0-9.]/g, '')) || 0;
+      }
+      return parsed as IdentifiedProductData;
+    }
+  } catch (err) {
+    console.warn('Direct Gemini call error:', err);
+  }
+  return null;
+}
+
+// Client service to identify packaging details from image base64
+export async function identifyProductFromImage(imageBase64: string, customApiKey?: string): Promise<IdentifiedProductData> {
+  const geminiApiKey = customApiKey || (typeof localStorage !== 'undefined' ? (localStorage.getItem('gemini_api_key') || undefined) : undefined);
+
+  // 1. Call server AI identification endpoint (/api/identify-product)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    
     const response = await fetch('/api/identify-product', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64 })
+      signal: controller.signal,
+      body: JSON.stringify({ imageBase64, geminiApiKey })
     });
+    clearTimeout(timeout);
 
     if (response.ok) {
       const result = await response.json();
-      if (result.data) {
+      if (result.data && (result.data.productName || result.data.brand || result.data.mrp)) {
+        console.log(`Product identified via ${result.source}: ${result.data.brand} - MRP ₹${result.data.mrp}`);
         return result.data as IdentifiedProductData;
       }
     }
-  } catch (err) {
-    console.info('Server AI identification unavailable, using clean real extraction handler:', err);
+  } catch (err: any) {
+    if (err?.name !== 'AbortError') {
+      console.info('Server endpoint unavailable, trying direct Gemini API:', err?.message);
+    }
   }
 
-  // 2. Direct clean extraction defaults for real packaging upload
-  return {
-    productName: '',
-    brand: '',
-    category: 'Packaged Commodity',
-    netQuantity: '',
-    mrp: 0,
-    unitSalePrice: '',
-    monthYearOfManufacture: `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
-    manufacturerName: '',
-    manufacturerAddress: '',
-    countryOfOrigin: 'India',
-    consumerCareDetails: '',
-    batchNumber: `LOT-${Date.now().toString().slice(-6)}`,
-    ocrRawText: 'Packaging label captured. Please verify extracted declarations.',
-    confidenceScore: 0.90,
-    statutoryFlags: [
-      'Statutory Rule 6(1) declarations to be verified'
-    ]
-  };
+  // 2. Direct Gemini API call from browser (when server is down or unavailable)
+  if (geminiApiKey) {
+    console.log('Attempting direct Gemini Vision API call from browser...');
+    const directResult = await callGeminiDirectly(imageBase64, geminiApiKey);
+    if (directResult) {
+      console.log(`Direct Gemini extracted: ${directResult.brand} - MRP ₹${directResult.mrp}`);
+      return directResult;
+    }
+  }
+
+  // 3. Fallback statutory packaging parser
+  console.warn('All AI extraction methods unavailable. Using default packaging data.');
+  return parsePackagingOcrText('');
 }
+
